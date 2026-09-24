@@ -1,0 +1,7 @@
+# A larger alternative: qwen2.5:7b (4.7 GB), with more careful phrasing and 2.5-4x slower.
+# Create it and use it with:
+#   ollama create docs-rag-qwen2.5 -f ollama/Modelfile.7b
+#   LLM_MODEL=docs-rag-qwen2.5 python flow.py "What is map used for?"
+FROM qwen2.5:7b
+PARAMETER num_ctx 8192
+PARAMETER num_predict 1024

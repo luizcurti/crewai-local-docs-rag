@@ -1,0 +1,229 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1450" viewBox="0 0 1480 1450" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Local Docs RAG: how a question is answered</title>
+  <style>
+    .title { font-size: 21px; font-weight: 700; }
+    .sub { font-size: 14px; }
+    .small { font-size: 12.5px; }
+    .note-title { font-size: 15px; font-weight: 700; }
+    .note { font-size: 13px; fill: #334155; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; fill: #334155; }
+    .label { font-size: 13px; fill: #475569; }
+    .group { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+    .icon { fill: none; stroke: #ffffff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-fill { fill: #ffffff; }
+    .flow { fill: none; stroke: #475569; stroke-width: 2; }
+    .link { fill: none; stroke-width: 1.6; stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+    <!-- Icons: drawn in a 48x48 box, white on the colored square. -->
+    <symbol id="i-user" viewBox="0 0 48 48"><circle class="icon" cx="24" cy="18" r="6"/><path class="icon" d="M13 36c0-6 5-10 11-10s11 4 11 10"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 48 48"><circle class="icon" cx="24" cy="24" r="12"/><path class="icon" d="M24 17v7l5 3"/></symbol>
+    <symbol id="i-code" viewBox="0 0 48 48"><path class="icon" d="M18 16l-8 8 8 8M30 16l8 8-8 8M26 13l-4 22"/></symbol>
+    <symbol id="i-search" viewBox="0 0 48 48"><circle class="icon" cx="21" cy="21" r="8"/><path class="icon" d="M27 27l9 9"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 48 48"><path class="icon" d="M24 12l13 7-13 7-13-7z"/><path class="icon" d="M11 25l13 7 13-7M11 31l13 7 13-7"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 48 48"><path class="icon-fill" d="M24 10l3.5 10.5L38 24l-10.5 3.5L24 38l-3.5-10.5L10 24l10.5-3.5z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 48 48"><circle class="icon" cx="24" cy="24" r="12"/><path class="icon" d="M18.5 24.5l4 4 7-8"/></symbol>
+    <symbol id="i-db" viewBox="0 0 48 48"><ellipse class="icon" cx="24" cy="15" rx="11" ry="4"/><path class="icon" d="M13 15v18c0 2.2 4.9 4 11 4s11-1.8 11-4V15M13 24c0 2.2 4.9 4 11 4s11-1.8 11-4"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 48 48"><path class="icon" d="M15 11h12l7 7v19H15z"/><path class="icon" d="M27 11v7h7M19 25h11M19 30h11"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 48 48"><rect class="icon" x="12" y="12" width="10" height="10" rx="2"/><rect class="icon" x="26" y="12" width="10" height="10" rx="2"/><rect class="icon" x="12" y="26" width="10" height="10" rx="2"/><rect class="icon" x="26" y="26" width="10" height="10" rx="2"/></symbol>
+    <symbol id="i-vector" viewBox="0 0 48 48"><circle class="icon" cx="14" cy="32" r="3"/><circle class="icon" cx="24" cy="14" r="3"/><circle class="icon" cx="35" cy="28" r="3"/><path class="icon" d="M16 29.5l6.5-12.5M26.5 16l6.5 10M17 32.5l15-3.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 48 48"><path class="icon" d="M24 11l14 25H10z"/><path class="icon" d="M24 20v8M24 32.5v.5"/></symbol>
+    <symbol id="i-bars" viewBox="0 0 48 48"><path class="icon" d="M13 36h23M16 36V27M22 36V20M28 36V24M34 36V14"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 48 48"><circle class="icon" cx="24" cy="24" r="12"/><path class="icon" d="M12 24h24M24 12c4 3.5 5.5 7.5 5.5 12S28 32.5 24 36c-4-3.5-5.5-7.5-5.5-12S20 15.5 24 12"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 48 48"><path class="icon-fill" d="M27 9L14 27h9l-2 12 13-18h-9z"/></symbol>
+  </defs>
+
+  <rect width="1480" height="1450" fill="#ffffff"/>
+
+  <!-- ============================================================ INGESTION (left) -->
+  <rect x="22" y="30" width="366" height="730" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="44" y="57" class="group" fill="#475569">INGESTION · ingest.py · run once</text>
+
+  <rect x="40" y="75" width="330" height="140" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="1.8"/>
+  <rect x="58" y="93" width="44" height="44" rx="10" fill="#64748b"/><use href="#i-doc" x="56" y="91" width="48" height="48"/>
+  <text x="116" y="121" class="title" fill="#1e293b">Official docs</text>
+  <text x="60" y="163" class="sub" fill="#334155">MDN — JavaScript language</text>
+  <text x="60" y="184" class="sub" fill="#334155">Node.js v24.21.0 — runtime APIs</text>
+  <text x="60" y="205" class="sub" fill="#334155">Python 3.14 — standard library</text>
+  <path class="flow" d="M205 215 V246" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="250" width="330" height="100" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <rect x="58" y="268" width="44" height="44" rx="10" fill="#2563eb"/><use href="#i-code" x="56" y="266" width="48" height="48"/>
+  <text x="116" y="288" class="title" fill="#1e3a8a">Parsers</text>
+  <text x="116" y="310" class="sub" fill="#1d4ed8">sources/ · one per documentation</text>
+  <text x="60" y="336" class="small" fill="#1d4ed8">functions, methods, classes + their examples</text>
+  <path class="flow" d="M205 350 V381" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="385" width="330" height="100" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <rect x="58" y="403" width="44" height="44" rx="10" fill="#2563eb"/><use href="#i-grid" x="56" y="401" width="48" height="48"/>
+  <text x="116" y="423" class="title" fill="#1e3a8a">Records</text>
+  <text x="116" y="445" class="sub" fill="#1d4ed8">entries.py</text>
+  <text x="60" y="471" class="small" fill="#1d4ed8">15,064 function records · 7,357 example records</text>
+  <path class="flow" d="M205 485 V516" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="520" width="330" height="80" rx="14" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.8"/>
+  <rect x="58" y="538" width="44" height="44" rx="10" fill="#0d9488"/><use href="#i-vector" x="56" y="536" width="48" height="48"/>
+  <text x="116" y="558" class="title" fill="#134e4a">Embeddings</text>
+  <text x="116" y="580" class="sub" fill="#0f766e">nomic-embed-text · Ollama</text>
+  <path class="flow" d="M205 600 V631" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="635" width="330" height="110" rx="14" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.8"/>
+  <rect x="58" y="653" width="44" height="44" rx="10" fill="#7c3aed"/><use href="#i-db" x="56" y="651" width="48" height="48"/>
+  <text x="116" y="673" class="title" fill="#4c1d95">ChromaDB</text>
+  <text x="116" y="695" class="sub" fill="#6d28d9">local vector database</text>
+  <text x="60" y="728" class="small" fill="#6d28d9">22,421 records · searched in steps 2a and 2b</text>
+
+  <!-- ============================================================ QUESTION FLOW (center) -->
+  <rect x="430" y="50" width="600" height="95" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="1.8"/>
+  <rect x="452" y="70" width="52" height="52" rx="12" fill="#64748b"/><use href="#i-user" x="454" y="72" width="48" height="48"/>
+  <text x="522" y="93" class="title" fill="#1e293b">Question</text>
+  <text x="522" y="118" class="sub" fill="#334155">web UI (Streamlit) · terminal (flow.py)</text>
+  <path class="flow" d="M730 145 V191" marker-end="url(#arrow)"/>
+
+  <rect x="430" y="195" width="600" height="95" rx="14" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+  <rect x="452" y="216" width="52" height="52" rx="12" fill="#475569"/><use href="#i-clock" x="454" y="218" width="48" height="48"/>
+  <text x="522" y="238" class="title" fill="#1e293b">Answer cache</text>
+  <text x="522" y="263" class="sub" fill="#334155">same question + model + database, within 1 day</text>
+  <path class="flow" d="M730 290 V386" marker-end="url(#arrow)"/>
+  <text x="742" y="322" class="label">not cached</text>
+
+  <!-- CrewAI Flow container -->
+  <rect x="410" y="340" width="640" height="690" rx="16" fill="#fdf4ff" fill-opacity="0.45" stroke="#c026d3" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="432" y="366" class="group" fill="#a21caf">CREWAI FLOW · flow.py</text>
+
+  <rect x="430" y="390" width="600" height="110" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <rect x="452" y="414" width="52" height="52" rx="12" fill="#2563eb"/><use href="#i-code" x="454" y="416" width="48" height="48"/>
+  <text x="522" y="434" class="title" fill="#1e3a8a">1. Understand the question</text>
+  <text x="522" y="459" class="sub" fill="#1d4ed8">language asked about · function names · intent</text>
+  <text x="522" y="482" class="small" fill="#1d4ed8">question embedding (nomic-embed-text)</text>
+
+  <path class="flow" d="M730 500 V525 M572 525 H887"/>
+  <path class="flow" d="M572 525 V556" marker-end="url(#arrow)"/>
+  <path class="flow" d="M887 525 V556" marker-end="url(#arrow)"/>
+  <text x="742" y="518" class="label">in parallel</text>
+
+  <rect x="430" y="560" width="285" height="110" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <rect x="448" y="578" width="44" height="44" rx="10" fill="#ea580c"/><use href="#i-search" x="446" y="576" width="48" height="48"/>
+  <text x="504" y="598" class="title" fill="#9a3412" style="font-size:18px">2a. Function search</text>
+  <text x="504" y="620" class="sub" fill="#c2410c">function records</text>
+  <text x="448" y="652" class="small" fill="#c2410c">exact names + semantic search</text>
+
+  <rect x="745" y="560" width="285" height="110" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <rect x="763" y="578" width="44" height="44" rx="10" fill="#ea580c"/><use href="#i-search" x="761" y="576" width="48" height="48"/>
+  <text x="819" y="598" class="title" fill="#9a3412" style="font-size:18px">2b. Example search</text>
+  <text x="819" y="620" class="sub" fill="#c2410c">example records</text>
+  <text x="763" y="652" class="small" fill="#c2410c">exact names + semantic search</text>
+
+  <!-- both searches query ChromaDB -->
+  <path class="flow" d="M430 615 H405 V690 H374" marker-end="url(#arrow)"/>
+
+  <path class="flow" d="M572 670 V700 H887 V670 M730 700 V718" marker-end="url(#arrow)"/>
+
+  <rect x="430" y="722" width="600" height="110" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <rect x="452" y="746" width="52" height="52" rx="12" fill="#2563eb"/><use href="#i-layers" x="454" y="748" width="48" height="48"/>
+  <text x="522" y="766" class="title" fill="#1e3a8a">3. Build context</text>
+  <text x="522" y="791" class="sub" fill="#1d4ed8">one section per language that has the function</text>
+  <text x="522" y="814" class="small" fill="#1d4ed8">the chosen functions + their documentation examples</text>
+  <path class="flow" d="M730 832 V876" marker-end="url(#arrow)"/>
+
+  <rect x="430" y="880" width="600" height="125" rx="14" fill="#fae8ff" stroke="#c026d3" stroke-width="1.8"/>
+  <rect x="452" y="904" width="52" height="52" rx="12" fill="#c026d3"/><use href="#i-spark" x="454" y="906" width="48" height="48"/>
+  <text x="522" y="924" class="title" fill="#701a75">4. Write the answer</text>
+  <text x="522" y="949" class="sub" fill="#86198f">“Documentation writer” agent · one task per language</text>
+  <text x="522" y="972" class="sub" fill="#86198f">Ollama · qwen2.5:3b · about 100 words · streamed</text>
+  <text x="522" y="993" class="small" fill="#a21caf">uses only the retrieved documentation</text>
+
+  <path class="flow" d="M730 1005 V1076" marker-end="url(#arrow)"/>
+
+  <rect x="430" y="1080" width="600" height="120" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8"/>
+  <rect x="452" y="1104" width="52" height="52" rx="12" fill="#16a34a"/><use href="#i-check" x="454" y="1106" width="48" height="48"/>
+  <text x="522" y="1124" class="title" fill="#14532d">Answer</text>
+  <text x="522" y="1149" class="sub" fill="#15803d">explanation + documentation examples, as documented</text>
+  <text x="522" y="1172" class="sub" fill="#15803d">+ links to the sources</text>
+  <text x="522" y="1191" class="small" fill="#16a34a">saved to the answer cache</text>
+
+  <!-- ============================================================ NOTES (right) -->
+  <!-- example questions -->
+  <path class="link" stroke="#7c3aed" d="M1030 97 H1086"/>
+  <rect x="1090" y="42" width="370" height="112" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="1110" y="68" class="note-title" fill="#5b21b6">Example questions</text>
+  <text x="1110" y="92" class="mono">What is map used for?</text>
+  <text x="1110" y="113" class="mono">Give me an example of Array.map</text>
+  <text x="1110" y="134" class="mono">What parameters does map take?</text>
+
+  <!-- cache hit -->
+  <path class="link" stroke="#16a34a" d="M1030 242 H1086"/>
+  <rect x="1090" y="182" width="370" height="120" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="1106" y="198" width="34" height="34" rx="8" fill="#16a34a"/><use href="#i-bolt" x="1105" y="197" width="36" height="36"/>
+  <text x="1152" y="220" class="note-title" fill="#166534">Cached answer</text>
+  <text x="1110" y="252" class="note">A question asked again is answered from</text>
+  <text x="1110" y="272" class="note">disk in milliseconds: no LLM call, 0 tokens.</text>
+  <text x="1110" y="292" class="note">Re-indexing or a new model invalidates it.</text>
+
+  <!-- other languages -->
+  <path class="link" stroke="#2563eb" d="M1030 445 H1086"/>
+  <rect x="1090" y="390" width="370" height="110" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="1106" y="406" width="34" height="34" rx="8" fill="#2563eb"/><use href="#i-globe" x="1105" y="405" width="36" height="36"/>
+  <text x="1152" y="428" class="note-title" fill="#1e40af">Questions in other languages</text>
+  <text x="1110" y="462" class="note">“Para que serve map?” is translated to</text>
+  <text x="1110" y="482" class="note">English first. Answers are always in English.</text>
+
+  <!-- documentation used -->
+  <path class="link" stroke="#ea580c" d="M1030 615 H1086"/>
+  <rect x="1090" y="545" width="370" height="140" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="1110" y="571" class="note-title" fill="#9a3412">What the search finds</text>
+  <text x="1110" y="595" class="note">“map” → Array.prototype.map (JavaScript)</text>
+  <text x="1110" y="615" class="note">and map() (Python): a section for each.</text>
+  <text x="1110" y="639" class="note">“in Python”, “in node” → only that language.</text>
+  <text x="1110" y="663" class="note">No function named? The closest records.</text>
+
+  <!-- nothing found -->
+  <path class="link" stroke="#d97706" d="M1030 777 H1086"/>
+  <rect x="1090" y="722" width="370" height="110" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="1106" y="738" width="34" height="34" rx="8" fill="#d97706"/><use href="#i-warn" x="1105" y="737" width="36" height="36"/>
+  <text x="1152" y="760" class="note-title" fill="#92400e">Nothing relevant found</text>
+  <text x="1110" y="794" class="note">Off-topic question, e.g. “the weather today”:</text>
+  <text x="1110" y="814" class="note">“Nothing relevant was found.” No LLM call.</text>
+
+  <!-- streaming and usage -->
+  <path class="link" stroke="#0d9488" d="M1030 942 H1086"/>
+  <rect x="1090" y="872" width="370" height="140" rx="12" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="1106" y="888" width="34" height="34" rx="8" fill="#0d9488"/><use href="#i-bars" x="1105" y="887" width="36" height="36"/>
+  <text x="1152" y="910" class="note-title" fill="#115e59">Streaming and usage</text>
+  <text x="1110" y="944" class="note">First words on screen after about 1 second.</text>
+  <text x="1110" y="964" class="note">Time and tokens shown for every answer:</text>
+  <text x="1110" y="984" class="note">~650 prompt + 110 completion tokens</text>
+  <text x="1110" y="1002" class="note">for a one-language answer.</text>
+
+  <!-- answer example -->
+  <path class="link" stroke="#16a34a" d="M1030 1140 H1086"/>
+  <rect x="1090" y="1052" width="370" height="176" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="1110" y="1078" class="note-title" fill="#166534">Answer, as shown</text>
+  <text x="1110" y="1102" class="mono" style="font-weight:700">### JavaScript</text>
+  <text x="1110" y="1122" class="mono">`map()` creates a new array with</text>
+  <text x="1110" y="1140" class="mono">the results of a function...</text>
+  <text x="1110" y="1162" class="mono">Example · Output: [2, 8, 18, 32]</text>
+  <text x="1110" y="1184" class="mono" style="font-weight:700">### Python</text>
+  <text x="1110" y="1204" class="mono">`map()` applies a function to...</text>
+
+  <!-- ============================================================ LEGEND -->
+  <rect x="22" y="1262" width="1438" height="118" rx="14" fill="#fffdf5" stroke="#d6b86a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="44" y="1292" class="group" fill="#8a6d1d">LEGEND</text>
+
+  <rect x="44" y="1308" width="26" height="26" rx="7" fill="#64748b"/><text x="80" y="1326" class="sub" fill="#334155">Input and documentation</text>
+  <rect x="320" y="1308" width="26" height="26" rx="7" fill="#2563eb"/><text x="356" y="1326" class="sub" fill="#334155">Code step, no LLM</text>
+  <rect x="570" y="1308" width="26" height="26" rx="7" fill="#ea580c"/><text x="606" y="1326" class="sub" fill="#334155">Search</text>
+  <rect x="740" y="1308" width="26" height="26" rx="7" fill="#7c3aed"/><text x="776" y="1326" class="sub" fill="#334155">Vector database (ChromaDB)</text>
+  <rect x="1060" y="1308" width="26" height="26" rx="7" fill="#0d9488"/><text x="1096" y="1326" class="sub" fill="#334155">Local model (Ollama)</text>
+
+  <rect x="44" y="1344" width="26" height="26" rx="7" fill="#c026d3"/><text x="80" y="1362" class="sub" fill="#334155">CrewAI agent (LLM)</text>
+  <rect x="320" y="1344" width="26" height="26" rx="7" fill="#475569"/><text x="356" y="1362" class="sub" fill="#334155">Answer cache</text>
+  <rect x="570" y="1344" width="26" height="26" rx="7" fill="#16a34a"/><text x="606" y="1362" class="sub" fill="#334155">Answer</text>
+  <rect x="740" y="1344" width="26" height="26" rx="7" fill="#d97706"/><text x="776" y="1362" class="sub" fill="#334155">No answer</text>
+  <path class="link" stroke="#475569" d="M1062 1357 H1090"/><text x="1096" y="1362" class="sub" fill="#334155">Note, not a step</text>
+
+  <text x="740" y="1420" class="small" fill="#64748b" text-anchor="middle">Everything runs locally: documentation, embeddings, vector database and LLM. No API keys, no cloud calls.</text>
+</svg>

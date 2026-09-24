@@ -1,0 +1,10 @@
+# The default LLM: qwen2.5:3b with an 8k-token context and a cap on the answer length.
+# It only rewrites the documentation it is given (the examples are copied from the docs),
+# and it writes ~50 tokens/s on an M1 Pro, 2.5-4x faster than qwen2.5:7b, in 1.9 GB of memory.
+# Ollama's default 4,096-token window silently drops the start of a longer prompt, and
+# without num_predict a generation that starts repeating itself runs until the context is full.
+# Create it with:
+#   ollama create docs-rag-qwen2.5-3b -f ollama/Modelfile
+FROM qwen2.5:3b
+PARAMETER num_ctx 8192
+PARAMETER num_predict 1024
