@@ -185,13 +185,16 @@ with ask_tab:
             q = s.query
             with st.expander("1. Understand the question", expanded=True):
                 names = ", ".join(f"`{n['text']}`" for n in q["names"]) or "none"
-                st.markdown(
-                    f"- **Language:** {q['language'] or 'not stated'}" + (f" ({q['runtime']})" if q["runtime"] else "") + "\n"
-                    f"- **Function names:** {names}\n"
-                    f"- **Intent:** {q['intent']}\n"
-                    f"- **Embedded text:** {q['search_text']}"
-                    + ("" if q["search_text"] == q["question"] else " (translated to English)")
-                )
+                if not s.understood:
+                    st.markdown("The question could not be translated into English, so it was not searched.")
+                else:
+                    st.markdown(
+                        f"- **Language:** {q['language'] or 'not stated'}" + (f" ({q['runtime']})" if q["runtime"] else "") + "\n"
+                        f"- **Function names:** {names}\n"
+                        f"- **Intent:** {q['intent']}\n"
+                        f"- **Embedded text:** {q['search_text']}"
+                        + ("" if q["search_text"] == q["question"] else " (translated to English)")
+                    )
             with st.expander("2a. Function search"):
                 for name, hits in s.name_hits.items():
                     st.markdown(f"Exact name `{name}`:")

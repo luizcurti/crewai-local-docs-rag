@@ -38,7 +38,7 @@ import answer_cache
 from config import ANSWER_CACHE_TTL, LLM_MAX_TOKENS, LLM_MODEL, LLM_TIMEOUT, MODEL_KEEP_ALIVE, OLLAMA_URL
 from entries import short_title
 from languages import LANGUAGES
-from query import Name, Query, analyze, is_english
+from query import Name, Query, analyze, clean_translation, is_english, is_readable
 from store import embed_query, examples_for, find_by_name, get_collection, vector_search
 
 MAX_FUNCTIONS = 3         # per language
@@ -63,6 +63,12 @@ TRANSLATE_PROMPT = (
     "Question: {question}"
 )
 NOTHING_FOUND = "Nothing relevant was found in the documentation."
+# Languages qwen2.5:3b translates reliably, shown when it could not read a question.
+QUESTION_LANGUAGES = "English, Português, Español, Français, Deutsch, Italiano, Русский, 中文, 日本語, 한국어"
+NOT_UNDERSTOOD = (
+    "Sorry, I could not understand the question. Please ask it in one of these languages: "
+    f"{QUESTION_LANGUAGES}. Write function names as they appear in code (`map`, `await`, `fs.readFile`)."
+)
 GENERATED_NOTE = "Example written by the model: the official documentation has no example for this function."
 INTENT_RULES = {
     "explain": "Explain what it is for and how it is used, in two or three sentences.",
@@ -119,6 +125,7 @@ class DocsState(BaseModel):
     answer: str = ""
     timings: dict[str, float] = Field(default_factory=dict)
     tokens: dict[str, int] = Field(default_factory=lambda: {"prompt": 0, "completion": 0, "requests": 0})
+    understood: bool = True  # False when the question could not be translated into English
     cached: bool = False  # answered from the answer cache, without the LLM
     original: dict[str, float] = Field(default_factory=dict)  # seconds and tokens of the first answer
 
@@ -173,9 +180,15 @@ class DocsFlow(Flow[DocsState]):
         english = None
         if not is_english(question):
             # Answers are in English, and nomic-embed-text only understands English.
-            translator = llm()
-            english = translator.call(TRANSLATE_PROMPT.format(question=question)).strip().strip('"') or None
-            self.state.count_tokens(translator.get_token_usage_summary())
+            if is_readable(question):
+                translator = llm()
+                english = clean_translation(translator.call(TRANSLATE_PROMPT.format(question=question)))
+                self.state.count_tokens(translator.get_token_usage_summary())
+            if english is None:
+                # Searching with a failed translation answers some other question.
+                self.state.understood = False
+                self.state.query = Query(question=question, search_text=question).__dict__
+                return
         query = analyze(question, english)
         self.state.query = {**query.__dict__, "names": [n.__dict__ for n in query.names]}
         self.state.query_vector = embed_query(query.search_text)
@@ -185,6 +198,8 @@ class DocsFlow(Flow[DocsState]):
     @listen(understand)
     @_timed
     def function_search(self):
+        if not self.state.understood:
+            return
         q, vector = self.q, self.state.query_vector
         for name in q.names:
             ranked = rank_name_hits(name, find_by_name(name.text, vector, q.language))
@@ -201,6 +216,8 @@ class DocsFlow(Flow[DocsState]):
     @listen(understand)
     @_timed
     def example_search(self):
+        if not self.state.understood:
+            return
         q, vector = self.q, self.state.query_vector
         ids = [h["id"] for name in q.names for h in find_by_name(name.text, vector, q.language)[:30]]
         self.state.name_examples = examples_for(ids)
@@ -246,7 +263,7 @@ class DocsFlow(Flow[DocsState]):
     def write_answer(self):
         q, s = self.q, self.state
         if not s.sections:
-            s.answer = NOTHING_FOUND
+            s.answer = NOTHING_FOUND if s.understood else NOT_UNDERSTOOD
             return s.answer
         writer = Agent(
             role="Documentation writer",

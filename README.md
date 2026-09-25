@@ -129,6 +129,7 @@ How each source is parsed:
 The query is a [CrewAI Flow](https://docs.crewai.com/concepts/flows). Each step has one job. Only two can call the LLM: translating a question asked in another language, and writing the answer.
 
 1. **Understand** (code): finds the language asked about ("in Python", "in node"), the function names (`map`, `Array.map`, `fs.readFile`) and the intent (explain, example, parameters, compare). A question in another language ("Para que serve map?") is first translated into English by the LLM, because the embedding model is English-only. Answers are always in English.
+   - `qwen2.5:3b` translates the major languages well (Portuguese, Spanish, French, German, Italian, Russian, Chinese, Japanese, Korean and more), as long as function names are written as in code. With a language it cannot read, it answers some other question or repeats its prompt. So a failed translation is never searched: a question in a script it cannot read (Cyrillic letters outside Russian and Ukrainian, as in Tatar or Kazakh), or a translation that is not English or echoes the prompt, gets a reply listing the languages that work.
 2. **Function search** and **example search**, in parallel:
    - **Exact names:** the records of every name the question mentions, scored by similarity to the question.
    - **Semantic search:** the nearest records in Chroma, for questions that name no function ("how do I read a file line by line in node").
@@ -141,7 +142,7 @@ The query is a [CrewAI Flow](https://docs.crewai.com/concepts/flows). Each step 
 
 ### Performance
 
-On an M1 Pro (16 GB), an answer takes about 3 to 10 seconds, almost all of it spent writing the explanation. Understanding the question, both searches and building the context take under a second together.
+In local tests, an answer takes about 3 to 10 seconds, almost all of it spent writing the explanation. Understanding the question, both searches and building the context take under a second together.
 
 - **Streaming:** the UI shows each section while it is written, so the first words appear about a second after asking.
 - **Answer cache:** a question asked again is answered from disk in milliseconds, with no LLM call. Answers are kept for a day. The cache key is the normalized question plus the model and the database version, so changing either one never serves a stale answer.

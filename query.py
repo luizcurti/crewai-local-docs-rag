@@ -49,6 +49,13 @@ INTENTS = {
 
 CODE_SPAN_RE = re.compile(r"`([^`]+)`")
 IDENTIFIER_RE = re.compile(r"[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\(\))?")
+# Cyrillic letters outside Russian and Ukrainian (ң, ә, ө, ү: Tatar, Kazakh, Kyrgyz...).
+# qwen2.5:3b does not read those languages: it "translates" them into unrelated questions.
+UNREADABLE_RE = re.compile(r"[Ѐ-ӿ](?<![а-яёА-ЯЁіїєґІЇЄҐ])")
+# What qwen2.5:3b sometimes writes around a translation: a label ("Translate only: ...",
+# "English: ..."), or the prompt's own instructions when it cannot read the question.
+TRANSLATION_LABEL_RE = re.compile(r"^\s*(?:translate(?: only)?|translation|english(?: question)?|question)\s*:\s*", re.I)
+PROMPT_ECHO_RE = re.compile(r"function names|add nothing|exactly as written|reply with", re.I)
 
 
 @dataclass
@@ -75,6 +82,23 @@ def is_english(question: str) -> bool:
     """True when the question has an English word, or is only code ("Array.map")."""
     words = re.findall(r"[^\W\d_]+", CODE_SPAN_RE.sub(" ", question).lower())
     return not words or any(w in ENGLISH_WORDS for w in words) or bool(IDENTIFIER_RE.fullmatch(question.strip()))
+
+
+def is_readable(question: str) -> bool:
+    """False for a script the model cannot translate (see UNREADABLE_RE)."""
+    return not UNREADABLE_RE.search(question)
+
+
+def clean_translation(reply: str) -> str | None:
+    """The English question in the model's translation, or None when the model did not
+    translate: it repeated the prompt, or replied in another language."""
+    text = reply
+    while TRANSLATION_LABEL_RE.match(text):
+        text = TRANSLATION_LABEL_RE.sub("", text, count=1)
+    text = text.strip().split("\n")[0].strip().strip("\"'`").strip()
+    if not text or text.startswith("?") or PROMPT_ECHO_RE.search(text) or not is_english(text):
+        return None
+    return text
 
 
 def detect_language(question: str) -> tuple[str | None, str | None]:

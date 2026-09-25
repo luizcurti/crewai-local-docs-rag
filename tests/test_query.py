@@ -1,4 +1,4 @@
-from query import analyze, is_english
+from query import analyze, clean_translation, is_english, is_readable
 
 
 def names(question):
@@ -36,3 +36,26 @@ def test_questions_in_other_languages_are_analyzed_in_english():
     q = analyze("Me dê um exemplo de Array.map em JavaScript", english="Give me an example of Array.map in JavaScript")
     assert (q.language, q.intent, q.search_text) == ("javascript", "example", "Give me an example of Array.map in JavaScript")
     assert [n.text for n in q.names] == ["Array.map"]
+
+
+def test_translations_keep_only_the_english_question():
+    # Replies of qwen2.5:3b to the translation prompt.
+    assert clean_translation("What is map used for?") == "What is map used for?"
+    assert clean_translation('"How do I read a file line by line in node?"') == "How do I read a file line by line in node?"
+    assert clean_translation("Translate only: explain to me wait") == "explain to me wait"
+    assert clean_translation("await") == "await"
+
+
+def test_failed_translations_are_rejected():
+    assert clean_translation("Translate:\n\nHow to keep code and function names exactly as written, add nothing.") is None
+    assert clean_translation("how to keep code and function names exactly as written, add nothing.") is None
+    assert clean_translation("miña await аñлат") is None  # not translated
+    assert clean_translation("leg await uit") is None
+    assert clean_translation("???") is None and clean_translation("") is None
+
+
+def test_scripts_the_model_cannot_read():
+    assert is_readable("объясни мне await") and is_readable("поясни мені await")  # Russian, Ukrainian
+    assert is_readable("給我解釋一下 await") and is_readable("para que serve o map?")
+    assert not is_readable("аңлат мине көт")        # Tatar
+    assert not is_readable("маған await түсіндір")  # Kazakh
