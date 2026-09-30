@@ -240,3 +240,13 @@ def test_ranking_does_not_change_the_records_it_was_given():
     records = [hit("javascript_array_map", "javascript", "Array.prototype.map", 0.8, function="map")]
     ranked = rank_name_hits(Name("map", strong=True), records)
     assert ranked[0]["score"] > 0.8 and records[0]["score"] == 0.8
+
+
+def test_nothing_is_cached_while_an_ingestion_is_incomplete(monkeypatch, tmp_path):
+    import flow
+
+    fake = use_fakes(monkeypatch, tmp_path, [Section(language="javascript")])
+    monkeypatch.setattr(flow, "index_version", lambda: None)
+    flow.ask("What is map used for?", log=False)
+    assert flow.ask("What is map used for?", log=False).cached is False
+    assert fake.runs == 2 and list(tmp_path.glob("*.json")) == []

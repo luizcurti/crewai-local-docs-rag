@@ -75,12 +75,13 @@ def ingest_complete() -> bool:
     return info is None or info.get("complete", False)
 
 
-def index_version() -> str:
-    """Changes with every ingestion, even one that keeps the number of records."""
+def index_version() -> str | None:
+    """Changes with every ingestion, even one that keeps the number of records. None while
+    an ingestion is incomplete: its records keep changing, so nothing may be cached."""
     info = _ingest_info()
-    if info and info.get("complete"):
-        return info["version"]
-    return f"count-{get_collection().count()}"
+    if info is None:
+        return f"count-{get_collection().count()}"
+    return info["version"] if info.get("complete") else None
 
 
 def _where(**filters) -> dict | None:
@@ -151,7 +152,7 @@ def stats() -> dict:
     collection = get_collection()
     counts = {}
     for runtime in RUNTIMES:  # IDs only: the metadata holds every example's code
-        for type in ("function", "example"):
-            if n := len(collection.get(where={"$and": [{"runtime": runtime}, {"type": type}]}, include=[])["ids"]):
-                counts[f"{runtime}/{type}"] = n
+        for kind in ("function", "example"):
+            if n := len(collection.get(where={"$and": [{"runtime": runtime}, {"type": kind}]}, include=[])["ids"]):
+                counts[f"{runtime}/{kind}"] = n
     return {"total": collection.count(), "by_source": counts}

@@ -82,7 +82,7 @@ supported "$PY" || fail ".venv uses $("$PY" --version); Python 3.12 or 3.13 is r
 
 # 3. Python packages, installed again whenever requirements.txt changes
 # (SHA-1 with Python, as `shasum` did: shasum is missing from some minimal Linux images)
-REQ_HASH="$("$PY" -c "import hashlib; print(hashlib.sha1(open('requirements.txt', 'rb').read()).hexdigest())")"
+REQ_HASH="$("$PY" -c "import hashlib, pathlib; print(hashlib.sha1(pathlib.Path('requirements.txt').read_bytes()).hexdigest())")"
 if [[ "$(cat .venv/.requirements-hash 2>/dev/null)" != "$REQ_HASH" ]]; then
   step "Installing the Python packages (requirements.txt)"
   "$PY" -m pip install -q --upgrade pip

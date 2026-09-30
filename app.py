@@ -13,7 +13,7 @@ import streamlit as st
 
 from config import EMBED_MODEL, LLM_MODEL
 from languages import LANGUAGES, RUNTIMES, describe
-from preflight import ollama_problems
+from preflight import INCOMPLETE_INDEX, ollama_problems
 
 st.set_page_config(page_title="Local Docs RAG", page_icon="📚", layout="wide")
 
@@ -34,9 +34,9 @@ def service_status() -> dict:
     problems = ollama_problems()
     if problems:
         return {"problems": problems, "stats": None}
-    from store import stats
+    from store import ingest_complete, stats
 
-    return {"problems": [], "stats": stats()}
+    return {"problems": [], "stats": stats(), "complete": ingest_complete()}
 
 
 @st.cache_resource
@@ -57,6 +57,8 @@ with st.sidebar:
     stats = status["stats"]
     if stats and stats["total"]:
         st.success(f"Vector database: {stats['total']:,} records")
+        if not status.get("complete", True):
+            st.warning(INCOMPLETE_INDEX)
         for runtime in RUNTIMES.values():
             f, e = stats["by_source"].get(f"{runtime.key}/function", 0), stats["by_source"].get(f"{runtime.key}/example", 0)
             st.caption(f"{describe(runtime.language, runtime.key)}: {f:,} functions · {e:,} examples")

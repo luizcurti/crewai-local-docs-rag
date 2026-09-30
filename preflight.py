@@ -33,12 +33,22 @@ def _install_hint(model: str) -> str:
     return f"Model '{model}' is not installed. Run: ollama pull {model}"
 
 
+INCOMPLETE_INDEX = "The last ingestion did not finish: answers may mix old and new records. Run: python ingest.py"
+
+
 def index_problems() -> list[str]:
     from store import get_collection
 
     if get_collection().count() == 0:
         return ["The vector database is empty. Run: python ingest.py"]
     return []
+
+
+def index_warnings() -> list[str]:
+    """Not blocking: a database left halfway by an ingestion still answers."""
+    from store import ingest_complete
+
+    return [] if ingest_complete() else [INCOMPLETE_INDEX]
 
 
 def check_services(need_index: bool = True, need_llm: bool = True) -> None:
@@ -49,6 +59,9 @@ def check_services(need_index: bool = True, need_llm: bool = True) -> None:
     if problems:
         print("Cannot run:\n" + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
         sys.exit(1)
+    if need_index:
+        for warning in index_warnings():
+            print(f"Warning: {warning}", file=sys.stderr)
 
 
 if __name__ == "__main__":

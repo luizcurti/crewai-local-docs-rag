@@ -99,6 +99,7 @@ def test_every_ingestion_changes_the_index_version(records, monkeypatch, tmp_pat
     assert store.index_version() == f"count-{records.count()}"
     store.mark_ingest(complete=False)
     assert not store.ingest_complete()  # stopped halfway: start.sh runs it again
+    assert store.index_version() is None  # records still changing: nothing is cached
     store.mark_ingest(complete=True)
     first = store.index_version()
     store.mark_ingest(complete=True)

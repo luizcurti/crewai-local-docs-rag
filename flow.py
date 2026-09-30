@@ -442,8 +442,8 @@ def ask(question: str, log: bool = True, on_sections: Callable[[list[Section]], 
     """Answers from the answer cache when the same question was answered in the last
     ANSWER_CACHE_TTL seconds with the same model and index, otherwise runs the flow."""
     start = time.monotonic()
-    use_cache = use_cache and ANSWER_CACHE_TTL > 0
     version = index_version()  # every ingestion changes the key
+    use_cache = use_cache and ANSWER_CACHE_TTL > 0 and version is not None
     if use_cache and (hit := answer_cache.get(question, version)):
         state = DocsState.model_validate(hit)
         state.original = {"seconds": round(sum(state.timings.values()), 2),
