@@ -5,7 +5,10 @@ answer. Each answer is stored as JSON under data/cache/, for ANSWER_CACHE_TTL se
 (one day by default). The key is the normalized question plus the LLM and the vector
 database version, so changing the model or re-indexing never serves a stale answer:
 
-    "What is map used for?" == "what is map used for" == "  What is  map used for?? "
+    "What is map used for?" == "  What is  map used for?? "
+
+Case is kept: "map" is Array.prototype.map and "Map" is the Map class, so they are
+different questions. Expired answers are deleted whenever a new one is saved.
 
 The key does not include the prompt: after changing it, clear the cache with
     python answer_cache.py
@@ -21,8 +24,8 @@ from config import ANSWER_CACHE_DIR, ANSWER_CACHE_TTL, LLM_MODEL
 
 
 def normalize(question: str) -> str:
-    """Lowercase, single spaces, no trailing punctuation."""
-    return re.sub(r"[\s?!.]+$", "", " ".join(question.lower().split()))
+    """Single spaces, no trailing punctuation. Case is kept: it tells map from Map."""
+    return re.sub(r"[\s?!.]+$", "", " ".join(question.split()))
 
 
 def _path(question: str, index_version: str) -> Path:
@@ -45,8 +48,21 @@ def get(question: str, index_version: str) -> dict | None:
 
 def put(question: str, index_version: str, state: dict) -> None:
     ANSWER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _delete_expired()
     entry = {"saved_at": time.time(), "question": question, "model": LLM_MODEL, "state": state}
     _path(question, index_version).write_text(json.dumps(entry))
+
+
+def _delete_expired() -> None:
+    """Answers are only read back when the same question is asked again: without this, the
+    cache of questions never repeated would grow forever. A file's age is its mtime."""
+    now = time.time()
+    for path in ANSWER_CACHE_DIR.glob("*.json"):
+        try:
+            if now - path.stat().st_mtime > ANSWER_CACHE_TTL:
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass  # deleted by another process meanwhile
 
 
 def clear() -> int:

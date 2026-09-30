@@ -78,3 +78,28 @@ def test_examples_of_functions_in_order(records):
         "nodejs_fs_readfile_example_01", "javascript_array_map_example_01", "javascript_array_map_example_02"]
     assert examples[0]["code"] == "code 1"
     assert store.examples_for([]) == []
+
+
+def test_names_are_returned_most_relevant_first(records):
+    # example_search keeps the first 30 of a name: "close" names 107 functions.
+    assert [h["full_name"] for h in store.find_by_name("map", query_vector=PYTHON)][0] == "map"
+    assert [h["full_name"] for h in store.find_by_name("map", query_vector=ARRAYS)][0] == "Array.prototype.map"
+
+
+def test_stats_count_each_source_and_type(records):
+    stats = store.stats()
+    assert stats["total"] == records.count()
+    assert stats["by_source"]["ecmascript/function"] == 3 and stats["by_source"]["ecmascript/example"] == 2
+    assert stats["by_source"]["nodejs/example"] == 1 and "cpython/example" not in stats["by_source"]
+
+
+def test_every_ingestion_changes_the_index_version(records, monkeypatch, tmp_path):
+    monkeypatch.setattr(store, "INGEST_FILE", tmp_path / "ingest.json")
+    assert store.ingest_complete()  # a database built before the marker existed
+    assert store.index_version() == f"count-{records.count()}"
+    store.mark_ingest(complete=False)
+    assert not store.ingest_complete()  # stopped halfway: start.sh runs it again
+    store.mark_ingest(complete=True)
+    first = store.index_version()
+    store.mark_ingest(complete=True)
+    assert store.ingest_complete() and store.index_version() != first

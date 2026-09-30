@@ -81,7 +81,8 @@ fi
 supported "$PY" || fail ".venv uses $("$PY" --version); Python 3.12 or 3.13 is required. Delete .venv and run ./start.sh again."
 
 # 3. Python packages, installed again whenever requirements.txt changes
-REQ_HASH="$(shasum requirements.txt | cut -d' ' -f1)"
+# (SHA-1 with Python, as `shasum` did: shasum is missing from some minimal Linux images)
+REQ_HASH="$("$PY" -c "import hashlib; print(hashlib.sha1(open('requirements.txt', 'rb').read()).hexdigest())")"
 if [[ "$(cat .venv/.requirements-hash 2>/dev/null)" != "$REQ_HASH" ]]; then
   step "Installing the Python packages (requirements.txt)"
   "$PY" -m pip install -q --upgrade pip
@@ -132,7 +133,8 @@ if ! grep -qx "$LLM_MODEL" <<<"$installed"; then
 fi
 
 # 6. Documentation and vector database
-records=$("$PY" -c "from store import get_collection; print(get_collection().count())" 2>/dev/null || echo 0)
+# An ingestion that stopped halfway (Ctrl+C, Ollama down) is run again.
+records=$("$PY" -c "from store import get_collection, ingest_complete; print(get_collection().count() if ingest_complete() else 0)" 2>/dev/null || echo 0)
 if [[ "$records" == "0" ]]; then
   confirm "Download the JavaScript, Node.js and Python documentation (~130 MB) and build the vector database (8 to 15 minutes)?" \
     || fail "Run: $PY ingest.py"

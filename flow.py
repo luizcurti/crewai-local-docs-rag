@@ -22,6 +22,7 @@ translating a question asked in another language, and writing the answer.
 
 import re
 import sys
+import threading
 import time
 from typing import Any, Callable
 
@@ -39,7 +40,7 @@ from config import ANSWER_CACHE_TTL, LLM_MAX_TOKENS, LLM_MODEL, LLM_TIMEOUT, MOD
 from entries import short_title
 from languages import LANGUAGES
 from query import Name, Query, analyze, clean_translation, is_english, is_readable
-from store import embed_query, examples_for, find_by_name, get_collection, vector_search
+from store import embed_query, examples_for, find_by_name, index_version, vector_search
 
 MAX_FUNCTIONS = 3         # per language
 MAX_LANGUAGES = 4
@@ -94,6 +95,21 @@ def keep_model_loaded() -> None:
         requests.post(f"{OLLAMA_URL}/api/generate", json={"model": LLM_MODEL, "keep_alive": MODEL_KEEP_ALIVE}, timeout=120)
     except requests.RequestException:
         pass  # only a speed-up
+
+
+# Streamed text goes to the answer whose task wrote it. The event bus is global, so one
+# handler serves every answer being written at the same time (two browser tabs): scoped
+# handlers would not do, as each scope removes every handler registered by another one.
+_streams: dict[str, Callable[[str], None]] = {}
+_streams_lock = threading.Lock()
+
+
+@crewai_event_bus.on(LLMStreamChunkEvent)
+def _dispatch_stream_chunk(_source, event):
+    with _streams_lock:
+        receive = _streams.get(str(event.task_id))
+    if receive:
+        receive(event.chunk)
 
 
 class Section(BaseModel):
@@ -161,6 +177,7 @@ class DocsFlow(Flow[DocsState]):
                  on_text: Callable[[int, str], None] | None = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.log, self.on_sections, self.on_text = log, on_sections, on_text
+        self.name_records: dict[str, list[dict]] = {}  # name -> functions of that name, most relevant first
 
     @property
     def q(self) -> Query:
@@ -192,6 +209,8 @@ class DocsFlow(Flow[DocsState]):
         query = analyze(question, english)
         self.state.query = {**query.__dict__, "names": [n.__dict__ for n in query.names]}
         self.state.query_vector = embed_query(query.search_text)
+        # Looked up once here: both searches below use them.
+        self.name_records = {n.text: find_by_name(n.text, self.state.query_vector, query.language) for n in query.names}
 
     # ------------------------------------------------------------------ 2a. function search
 
@@ -202,7 +221,7 @@ class DocsFlow(Flow[DocsState]):
             return
         q, vector = self.q, self.state.query_vector
         for name in q.names:
-            ranked = rank_name_hits(name, find_by_name(name.text, vector, q.language))
+            ranked = rank_name_hits(name, self.name_records.get(name.text, []))
             if ranked:
                 self.state.name_hits[name.text] = ranked
         for lang in self.languages():
@@ -219,7 +238,7 @@ class DocsFlow(Flow[DocsState]):
         if not self.state.understood:
             return
         q, vector = self.q, self.state.query_vector
-        ids = [h["id"] for name in q.names for h in find_by_name(name.text, vector, q.language)[:30]]
+        ids = [h["id"] for name in q.names for h in self.name_records.get(name.text, [])[:30]]
         self.state.name_examples = examples_for(ids)
         for lang in self.languages():
             runtime = q.runtime if lang == q.language else None
@@ -310,17 +329,23 @@ class DocsFlow(Flow[DocsState]):
                 async_execution=i < len(s.sections),
             ))
         crew = Crew(agents=[writer], tasks=tasks, verbose=False, tracing=False)
-        section_of = {str(task.id): i for i, task in enumerate(tasks)}
         written = [""] * len(tasks)
-        with crewai_event_bus.scoped_handlers():  # listen only while this answer is written
-            @crewai_event_bus.on(LLMStreamChunkEvent)
-            def stream(_source, event):
-                i = section_of.get(str(event.task_id))
-                if i is not None and self.on_text:
-                    written[i] += event.chunk
-                    self.on_text(i, written[i])
 
+        def receiver(i: int) -> Callable[[str], None]:
+            def receive(chunk: str) -> None:
+                written[i] += chunk
+                self.on_text(i, written[i])
+            return receive
+
+        receivers = {str(task.id): receiver(i) for i, task in enumerate(tasks)} if self.on_text else {}
+        with _streams_lock:
+            _streams.update(receivers)
+        try:
             result = crew.kickoff(inputs=inputs)
+        finally:
+            with _streams_lock:
+                for task_id in receivers:
+                    _streams.pop(task_id, None)
         s.count_tokens(result.token_usage)
         for section, task in zip(s.sections, tasks):
             section.explanation = task.output.raw.strip()
@@ -339,10 +364,10 @@ def rank_name_hits(name: Name, hits: list[dict]) -> list[dict]:
     if not name.strong and max((h["score"] for h in hits), default=0) < MIN_RELEVANCE:
         return []
     typed = name.text.split(".")[-1]
-    for h in hits:
-        h["score"] = round(h["score"] + (EXACT_NAME_BONUS if h["function"] == typed else 0)
-                           + (STRONG_NAME_BONUS if name.strong else 0)
-                           + (HAS_EXAMPLE_BONUS if h.get("examples") else 0), 4)
+    # Copies: example_search reads the same records at the same time.
+    hits = [{**h, "score": round(h["score"] + (EXACT_NAME_BONUS if h["function"] == typed else 0)
+                                 + (STRONG_NAME_BONUS if name.strong else 0)
+                                 + (HAS_EXAMPLE_BONUS if h.get("examples") else 0), 4)} for h in hits]
     return sorted(hits, key=lambda h: -h["score"])[:12]
 
 
@@ -418,8 +443,8 @@ def ask(question: str, log: bool = True, on_sections: Callable[[list[Section]], 
     ANSWER_CACHE_TTL seconds with the same model and index, otherwise runs the flow."""
     start = time.monotonic()
     use_cache = use_cache and ANSWER_CACHE_TTL > 0
-    index_version = str(get_collection().count())  # re-indexing changes the key
-    if use_cache and (hit := answer_cache.get(question, index_version)):
+    version = index_version()  # every ingestion changes the key
+    if use_cache and (hit := answer_cache.get(question, version)):
         state = DocsState.model_validate(hit)
         state.original = {"seconds": round(sum(state.timings.values()), 2),
                           "tokens": state.tokens["prompt"] + state.tokens["completion"]}
@@ -430,7 +455,7 @@ def ask(question: str, log: bool = True, on_sections: Callable[[list[Section]], 
     flow = DocsFlow(log=log, on_sections=on_sections, on_text=on_text)
     flow.kickoff(inputs={"question": question})
     if use_cache and flow.state.sections:  # failures raise, and are never cached
-        answer_cache.put(question, index_version, flow.state.model_dump(exclude={"query_vector"}))
+        answer_cache.put(question, version, flow.state.model_dump(exclude={"query_vector"}))
     return flow.state
 
 

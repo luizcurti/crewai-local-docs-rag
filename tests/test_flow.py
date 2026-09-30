@@ -136,11 +136,6 @@ def test_the_context_has_no_example_code():
 
 # ------------------------------------------------------------------ answer cache in ask()
 
-class FakeCollection:
-    def count(self):
-        return 100
-
-
 def fake_flow(sections):
     """A DocsFlow stand-in that 'answers' without Ollama, and counts its runs."""
     from flow import DocsState
@@ -167,7 +162,7 @@ def use_fakes(monkeypatch, tmp_path, sections):
     import flow
 
     monkeypatch.setattr(answer_cache, "ANSWER_CACHE_DIR", tmp_path)
-    monkeypatch.setattr(flow, "get_collection", FakeCollection)
+    monkeypatch.setattr(flow, "index_version", lambda: "100")
     fake = fake_flow(sections)
     monkeypatch.setattr(flow, "DocsFlow", fake)
     return fake
@@ -178,13 +173,13 @@ def test_a_repeated_question_comes_from_the_cache(monkeypatch, tmp_path):
 
     fake = use_fakes(monkeypatch, tmp_path, [Section(language="javascript")])
     first = ask("What is map used for?", log=False)
-    again = ask("what is map used for", log=False)
+    again = ask("  What is map  used for", log=False)
     assert fake.runs == 1
     assert (first.cached, again.cached) == (False, True)
     assert again.answer == "the answer"
     assert again.tokens == {"prompt": 0, "completion": 0, "requests": 0}
     assert again.original == {"seconds": 4.0, "tokens": 700}
-    ask("what is map used for", log=False, use_cache=False)
+    ask("What is map used for?", log=False, use_cache=False)
     assert fake.runs == 2
 
 
@@ -195,3 +190,53 @@ def test_nothing_found_is_not_cached(monkeypatch, tmp_path):
     ask("what is the weather today", log=False)
     ask("what is the weather today", log=False)
     assert fake.runs == 2
+
+
+def test_map_and_Map_are_not_the_same_cached_question(monkeypatch, tmp_path):
+    from flow import ask
+
+    fake = use_fakes(monkeypatch, tmp_path, [Section(language="javascript")])
+    ask("What is map used for?", log=False)
+    assert ask("What is Map used for?", log=False).cached is False
+    assert fake.runs == 2
+
+
+def test_reindexing_with_the_same_record_count_misses_the_cache(monkeypatch, tmp_path):
+    import flow
+
+    fake = use_fakes(monkeypatch, tmp_path, [Section(language="javascript")])
+    flow.ask("What is map used for?", log=False)
+    monkeypatch.setattr(flow, "index_version", lambda: "101")
+    assert flow.ask("What is map used for?", log=False).cached is False
+    assert fake.runs == 2
+
+
+# ------------------------------------------------------------------ streaming
+
+def test_streamed_text_goes_to_the_answer_whose_task_wrote_it():
+    """Two answers written at the same time (two browser tabs) each get only their own text,
+    through the one global handler, and nothing stays registered afterwards."""
+    from types import SimpleNamespace
+
+    import flow
+
+    received = {"a": "", "b": ""}
+    with flow._streams_lock:
+        flow._streams.update({"task-a": lambda c: received.__setitem__("a", received["a"] + c),
+                              "task-b": lambda c: received.__setitem__("b", received["b"] + c)})
+    try:
+        for task_id, chunk in [("task-a", "Array"), ("task-b", "Map"), ("task-a", ".map"), ("other", "x")]:
+            flow._dispatch_stream_chunk(None, SimpleNamespace(task_id=task_id, chunk=chunk))
+    finally:
+        with flow._streams_lock:
+            flow._streams.pop("task-a"), flow._streams.pop("task-b")
+    assert received == {"a": "Array.map", "b": "Map"}
+
+
+def test_ranking_does_not_change_the_records_it_was_given():
+    from flow import rank_name_hits
+    from query import Name
+
+    records = [hit("javascript_array_map", "javascript", "Array.prototype.map", 0.8, function="map")]
+    ranked = rank_name_hits(Name("map", strong=True), records)
+    assert ranked[0]["score"] > 0.8 and records[0]["score"] == 0.8

@@ -145,7 +145,7 @@ The query is a [CrewAI Flow](https://docs.crewai.com/concepts/flows). Each step 
 In local tests, an answer takes about 3 to 10 seconds, almost all of it spent writing the explanation. Understanding the question, both searches and building the context take under a second together.
 
 - **Streaming:** the UI shows each section while it is written, so the first words appear about a second after asking.
-- **Answer cache:** a question asked again is answered from disk in milliseconds, with no LLM call. Answers are kept for a day. The cache key is the normalized question plus the model and the database version, so changing either one never serves a stale answer.
+- **Answer cache:** a question asked again is answered from disk in milliseconds, with no LLM call. Answers are kept for a day. The cache key is the normalized question (case kept: `map` is not `Map`) plus the model and the database version, which every ingestion changes, so neither a new model nor a re-index serves a stale answer.
 - **Tokens:** a one-language answer uses about 650 prompt and 110 completion tokens; a two-language answer about 1,050 and 230. The model reads the function records and only the titles and outputs of the examples, not their code. The UI shows the time and tokens of each answer, and the session total.
 - **The model stays loaded** between questions for 30 minutes. Every LLM call has a timeout, and the answer length is capped.
 
@@ -199,6 +199,7 @@ python3 -m venv .venv
 
 ```bash
 .venv/bin/python ingest.py --sources python     # rebuild one source (mdn, node, python), keep the others
+                                                # (an interrupted run keeps the old records; ./start.sh runs it again)
 .venv/bin/python ingest.py --reset              # rebuild the whole database
 .venv/bin/python answer_cache.py                # clear the answer cache (e.g. after changing the prompt)
 .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest   # tests; no Ollama or database needed

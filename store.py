@@ -5,12 +5,16 @@ Every record has an ID, a vector, its text and metadata. Two record types:
     type=example  - one code example (javascript_array_map_example_01), with function_id
 """
 
+import json
+import time
+
 import chromadb
 import numpy as np
 import requests
 from chromadb.config import Settings
 
 from config import CHROMA_DIR, COLLECTION, EMBED_MODEL, MODEL_KEEP_ALIVE, OLLAMA_URL
+from languages import RUNTIMES
 
 # nomic-embed-text was trained with different prefixes for documents and queries.
 DOC_PREFIX = "search_document: "
@@ -49,6 +53,36 @@ def get_collection(reset: bool = False):
     )
 
 
+# Written by ingest.py next to the database: whether the last ingestion finished, and when.
+INGEST_FILE = CHROMA_DIR / "ingest.json"
+
+
+def mark_ingest(complete: bool) -> None:
+    INGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    INGEST_FILE.write_text(json.dumps({"complete": complete, "version": f"{time.time():.6f}"}))
+
+
+def _ingest_info() -> dict | None:
+    try:
+        return json.loads(INGEST_FILE.read_text())
+    except (OSError, ValueError):
+        return None  # a database built before this file existed
+
+
+def ingest_complete() -> bool:
+    """False while an ingestion runs, or after one stopped halfway."""
+    info = _ingest_info()
+    return info is None or info.get("complete", False)
+
+
+def index_version() -> str:
+    """Changes with every ingestion, even one that keeps the number of records."""
+    info = _ingest_info()
+    if info and info.get("complete"):
+        return info["version"]
+    return f"count-{get_collection().count()}"
+
+
 def _where(**filters) -> dict | None:
     clauses = [{k: v} for k, v in filters.items() if v is not None]
     if not clauses:
@@ -74,10 +108,10 @@ def vector_search(query_vector: list[float], type: str, n: int = 5, language: st
                  [1 - d for d in result["distances"][0]])
 
 
-def get_records(where: dict, query_vector: list[float] | None = None, limit: int = 200) -> list[dict]:
-    """Records matching metadata exactly (e.g. every function named "map"), scored against
-    the question when a query vector is given."""
-    result = get_collection().get(where=where, limit=limit, include=["documents", "metadatas", "embeddings"])
+def get_records(where: dict, query_vector: list[float] | None = None) -> list[dict]:
+    """Every record matching metadata exactly (e.g. every function named "map", 107 for
+    "close"), scored against the question when a query vector is given."""
+    result = get_collection().get(where=where, include=["documents", "metadatas", "embeddings"])
     if not result["ids"]:
         return []
     if query_vector is None:
@@ -102,21 +136,22 @@ def find_by_name(name: str, query_vector: list[float] | None = None, language: s
         # "Array.map", "path.join": the qualifier must match the object or the module.
         owner = parts[-2]
         hits = [h for h in hits if h["full_name_lower"] == name or owner in (h["object_lower"], h["module"].lower())]
-    return hits
+    return sorted(hits, key=lambda h: -h["score"])  # most relevant first
 
 
 def examples_for(function_ids: list[str]) -> list[dict]:
     if not function_ids:
         return []
-    hits = get_records({"$and": [{"type": "example"}, {"function_id": {"$in": function_ids}}]}, limit=200)
+    hits = get_records({"$and": [{"type": "example"}, {"function_id": {"$in": function_ids}}]})
     return sorted(hits, key=lambda h: (function_ids.index(h["function_id"]), h["example_number"]))
 
 
 def stats() -> dict:
     """Record counts per language and type, for the UI and preflight."""
-    metas = get_collection().get(include=["metadatas"])["metadatas"]
-    counts: dict[str, int] = {}
-    for m in metas:
-        key = f"{m['runtime']}/{m['type']}"
-        counts[key] = counts.get(key, 0) + 1
-    return {"total": len(metas), "by_source": counts}
+    collection = get_collection()
+    counts = {}
+    for runtime in RUNTIMES:  # IDs only: the metadata holds every example's code
+        for type in ("function", "example"):
+            if n := len(collection.get(where={"$and": [{"runtime": runtime}, {"type": type}]}, include=[])["ids"]):
+                counts[f"{runtime}/{type}"] = n
+    return {"total": collection.count(), "by_source": counts}
