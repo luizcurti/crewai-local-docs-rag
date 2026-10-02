@@ -1,0 +1,61 @@
+from query import analyze, clean_translation, is_english, is_readable
+
+
+def names(question):
+    return [(n.text, n.strong) for n in analyze(question).names]
+
+
+def test_example_questions():
+    q = analyze("What is map used for?")
+    assert (q.language, q.intent) == (None, "explain")
+    assert names("What is map used for?") == [("map", False)]
+    assert analyze("How do I use map in Python?").language == "python"
+    q = analyze("Give me an example of Array.map in JavaScript")
+    assert (q.language, q.intent) == ("javascript", "example")
+    assert names(q.question) == [("Array.map", True)]
+    q = analyze("What is the difference between map and filter?")
+    assert q.intent == "compare" and names(q.question) == [("map", False), ("filter", False)]
+    assert analyze("What parameters does map take?").intent == "parameters"
+
+
+def test_runtime_and_ordinary_words():
+    q = analyze("how do I read a file line by line in node")
+    assert (q.language, q.runtime) == ("javascript", "nodejs")
+    assert q.names == []  # ordinary words in a sentence are not function names
+
+
+def test_code_like_names_always_count():
+    assert names("what does `fs.readFile` do with a file") == [("fs.readFile", True)]
+    assert names("difference between list.sort() and sorted") == [("list.sort", True), ("sorted", False)]
+    assert names("what is Promise.all") == [("Promise.all", True)]
+
+
+def test_questions_in_other_languages_are_analyzed_in_english():
+    assert is_english("What is map used for?") and is_english("Array.map")
+    assert not is_english("Para que serve map?") and not is_english("¿Para qué sirve map?")
+    q = analyze("Me dê um exemplo de Array.map em JavaScript", english="Give me an example of Array.map in JavaScript")
+    assert (q.language, q.intent, q.search_text) == ("javascript", "example", "Give me an example of Array.map in JavaScript")
+    assert [n.text for n in q.names] == ["Array.map"]
+
+
+def test_translations_keep_only_the_english_question():
+    # Replies of qwen2.5:3b to the translation prompt.
+    assert clean_translation("What is map used for?") == "What is map used for?"
+    assert clean_translation('"How do I read a file line by line in node?"') == "How do I read a file line by line in node?"
+    assert clean_translation("Translate only: explain to me wait") == "explain to me wait"
+    assert clean_translation("await") == "await"
+
+
+def test_failed_translations_are_rejected():
+    assert clean_translation("Translate:\n\nHow to keep code and function names exactly as written, add nothing.") is None
+    assert clean_translation("how to keep code and function names exactly as written, add nothing.") is None
+    assert clean_translation("miña await аñлат") is None  # not translated
+    assert clean_translation("leg await uit") is None
+    assert clean_translation("???") is None and clean_translation("") is None
+
+
+def test_scripts_the_model_cannot_read():
+    assert is_readable("объясни мне await") and is_readable("поясни мені await")  # Russian, Ukrainian
+    assert is_readable("給我解釋一下 await") and is_readable("para que serve o map?")
+    assert not is_readable("аңлат мине көт")        # Tatar
+    assert not is_readable("маған await түсіндір")  # Kazakh
